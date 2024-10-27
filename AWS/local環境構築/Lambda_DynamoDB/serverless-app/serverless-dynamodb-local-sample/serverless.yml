@@ -1,0 +1,73 @@
+service: dynamodb-local-sample
+useDotenv: true
+
+custom:
+  stage: ${opt:stage, 'dev'}
+  dynamodbTableName: ${env:DYNAMODB_TABLE_NAME}-${self:custom.stage}
+  # DynamoDB Local
+  serverless-dynamodb:
+    docker: false
+    start:
+      migrate: true
+      host: 127.0.0.1
+      port: 8000
+      seed: true
+    seed:
+      sampleDatabese:
+        sources:
+          - table: ${self:custom.dynamodbTableName}
+            sources: [./seeds/seed.json]
+    stages:
+      - dev
+
+provider:
+  name: aws
+  stage: ${self:custom.stage}
+  region: ap-northeast-1
+  runtime: python3.10
+  environment:
+    TZ: Asia/Tokyo
+    DYNAMODB_TABLE_NAME: Movies-dev
+    IS_OFFLINE: true
+
+functions:
+  hello:
+    name: ${self:service}-handler
+    handler: handler/hello.lambda_handler
+    environment:
+      DYNAMODB_TABLE_NAME: ${self:custom.dynamodbTableName}
+    events:
+      - http:
+          path: /hello
+          method: get
+
+  new:
+    name: ${self:service}-new
+    handler: handler/new.lambda_handler # 新しい関数のハンドラを指定
+    environment:
+      DYNAMODB_TABLE_NAME: ${self:custom.dynamodbTableName}
+    events:
+      - http:
+          path: /new # 新しいエンドポイントのパス
+          method: get # HTTPメソッド
+
+resources:
+  Resources:
+    myDynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: UserID
+            AttributeType: S
+        KeySchema:
+          - AttributeName: UserID
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+        TableName: ${self:custom.dynamodbTableName}
+
+plugins:
+  - serverless-python-requirements
+  - serverless-offline
+  - serverless-dynamodb
